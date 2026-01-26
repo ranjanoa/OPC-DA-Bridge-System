@@ -37,27 +37,35 @@ app.UseCors("AllowAll");
 // Global State
 OpcDaServer? _server = null;
 bool _bridgeActive = false;
-DateTime _lastCommandProcessed = DateTime.UtcNow;
+DateTime _lastCommandProcessed = DateTime.UtcNow.AddMinutes(-5); // Start with a buffer to catch missed commands
 var _liveMonitor = new ConcurrentDictionary<string, object>();
 CancellationTokenSource? _cts = null;
 
 Bootstrap.Initialize();
 
-#region Persistent Storage Logic (Permission Fix)
+#region Persistent Storage Logic (ProgramData Fallback)
 
-// Helper to find a writable path for the config
+// Resolves a writable path even if Program Files is locked
 string GetSettingsPath() {
     string localPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "bridge_settings.json");
     
-    // Check if we have write access to the local folder
+    // Test if we can write to the local folder
     try {
-        using (var fs = System.IO.File.Open(localPath, FileMode.OpenOrCreate, FileAccess.ReadWrite)) { }
+        string testFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "write_test.tmp");
+        System.IO.File.WriteAllText(testFile, "test");
+        System.IO.File.Delete(testFile);
         return localPath;
     } catch (UnauthorizedAccessException) {
-        // If Program Files is locked, use ProgramData (standard Windows writable area for all users)
+        // Fallback to ProgramData (Standard Windows writable area for all users)
         string programData = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "IndustrialOpcBridge");
         if (!Directory.Exists(programData)) Directory.CreateDirectory(programData);
-        return Path.Combine(programData, "bridge_settings.json");
+        string fallbackPath = Path.Combine(programData, "bridge_settings.json");
+        
+        // If the file doesn't exist in ProgramData yet, try to copy the template from Program Files
+        if (!System.IO.File.Exists(fallbackPath) && System.IO.File.Exists(localPath)) {
+            try { System.IO.File.Copy(localPath, fallbackPath); } catch { }
+        }
+        return fallbackPath;
     } catch {
         return localPath;
     }
@@ -84,7 +92,6 @@ void SaveConfigToFile(BridgeConfig config) {
         Console.WriteLine($"[CONFIG] Successfully saved to: {path}");
     } catch (Exception ex) { 
         Console.WriteLine($"[CONFIG] CRITICAL SAVE ERROR: {ex.Message}");
-        Console.WriteLine("Try running the application as Administrator.");
     }
 }
 
@@ -118,7 +125,6 @@ app.MapGet("/api/browse", (string host, string progId, string? nodeId) => {
         var browser = new OpcDaBrowserAuto(_server);
         return Results.Ok(browser.GetElements(nodeId).Select(e => new { id = e.ItemId, name = e.Name, type = e.HasChildren ? "folder" : "tag" }));
     } catch (Exception ex) { 
-        Console.WriteLine($"[BROWSE] Error: {ex.Message}");
         return Results.Json(new { error = ex.Message }); 
     }
 });
@@ -128,12 +134,14 @@ app.MapPost("/api/bridge/start", (BridgeConfig config) => {
     SaveConfigToFile(config); 
     _bridgeActive = true;
     _cts = new CancellationTokenSource();
-    _lastCommandProcessed = DateTime.UtcNow.AddSeconds(-5); // Allow small overlap
+    
+    // Reset timer with buffer to ensure we don't skip the first command on start
+    _lastCommandProcessed = DateTime.UtcNow.AddMinutes(-1); 
     
     _ = Task.Run(() => RunIngestionLoop(config, _cts.Token));
     _ = Task.Run(() => RunActuationLoop(config, _cts.Token));
     
-    Console.WriteLine("[SYSTEM] Bridge Started.");
+    Console.WriteLine("[SYSTEM] Bridge Service Started.");
     return Results.Ok(new { status = "Active" });
 });
 
@@ -141,8 +149,21 @@ app.MapPost("/api/bridge/stop", () => {
     _bridgeActive = false;
     _cts?.Cancel();
     if (_server != null && _server.IsConnected) _server.Disconnect();
-    Console.WriteLine("[SYSTEM] Bridge Stopped.");
+    Console.WriteLine("[SYSTEM] Bridge Service Stopped.");
     return Results.Ok(new { status = "Stopped" });
+});
+
+app.MapDelete("/api/config/tag", (string tagId) => {
+    var config = LoadConfigFromFile();
+    if (config == null) return Results.NotFound();
+    var updated = config with { 
+        ReadTags = config.ReadTags.Where(t => t != tagId).ToArray(),
+        ReadMapping = config.ReadMapping?.Where(kv => kv.Key != tagId).ToDictionary(kv => kv.Key, kv => kv.Value),
+        WriteMapping = config.WriteMapping?.Where(kv => kv.Value != tagId).ToDictionary(kv => kv.Key, kv => kv.Value)
+    };
+    SaveConfigToFile(updated);
+    _liveMonitor.TryRemove(tagId, out _);
+    return Results.Ok(updated);
 });
 
 #endregion
@@ -151,7 +172,6 @@ app.MapPost("/api/bridge/stop", () => {
 
 async Task RunIngestionLoop(BridgeConfig config, CancellationToken ct) {
     if (config.ReadTags == null || config.ReadTags.Length == 0) return;
-    
     using var influx = new InfluxDBClient(config.InfluxUrl, config.InfluxToken);
     var writeApi = influx.GetWriteApi();
     var group = _server!.AddGroup("Ingest_" + Guid.NewGuid().ToString().Substring(0,8));
@@ -175,39 +195,49 @@ async Task RunIngestionLoop(BridgeConfig config, CancellationToken ct) {
 }
 
 async Task RunActuationLoop(BridgeConfig config, CancellationToken ct) {
+    if (config.WriteMapping == null || config.WriteMapping.Count == 0) {
+        Console.WriteLine("[ACTUATION] No write mappings defined. Loop suspended.");
+        return;
+    }
+
     using var influx = new InfluxDBClient(config.InfluxUrl, config.InfluxToken);
     var queryApi = influx.GetQueryApi();
     var writeApi = influx.GetWriteApi();
     var writeGroup = _server!.AddGroup("Act_" + Guid.NewGuid().ToString().Substring(0,8));
     
-    Console.WriteLine("[ACTUATION] Loop started, watching kiln2 measurement...");
+    Console.WriteLine($"[ACTUATION] Monitoring kiln2 for {config.WriteMapping.Count} mapped fields...");
 
     while (!ct.IsCancellationRequested && _bridgeActive) {
         try {
-            // Robust Query: Look back 1 hour to handle clock sync issues, but filter by local _lastCommandProcessed
+            // Query: Check last 1 hour of kiln2 commands
             string flux = $@"from(bucket: ""{config.InfluxBucket}"") 
                           |> range(start: -1h) 
                           |> filter(fn: (r) => r[""_measurement""] == ""kiln2"") 
                           |> last()";
             
             var tables = await queryApi.QueryAsync(flux, config.InfluxOrg);
+            int commandsFound = 0;
+
             foreach (var table in tables) {
                 foreach (var record in table.Records) {
                     var ts = record.GetTime()?.ToDateTimeUtc() ?? DateTime.MinValue;
                     
+                    // CLOCK DRIFT FIX: We compare record timestamp to our local processing tracker
                     if (ts > _lastCommandProcessed) {
+                        commandsFound++;
                         string incomingAlias = record.GetField();
                         object val = record.GetValue();
                         
-                        // Map alias to physical tag
                         string physicalTag = (config.WriteMapping != null && config.WriteMapping.TryGetValue(incomingAlias, out var t)) ? t : incomingAlias;
                         
-                        Console.WriteLine($"[ACTUATION] NEW COMMAND: {incomingAlias} ({physicalTag}) = {val}");
+                        Console.WriteLine($"[ACTUATION] EXECUTING: {incomingAlias} -> {physicalTag} = {val} (Time: {ts:HH:mm:ss}Z)");
                         
                         var item = writeGroup.Items.FirstOrDefault(i => i.ItemId == physicalTag) 
                                    ?? writeGroup.AddItems(new[] { new OpcDaItemDefinition { ItemId = physicalTag, IsActive = true } })[0].Item;
                         
                         writeGroup.Write(new[] { item }, new[] { val });
+                        
+                        // Update tracker to this record's time
                         _lastCommandProcessed = ts;
 
                         var feedback = PointData.Measurement("kiln2_feedback")
@@ -221,7 +251,7 @@ async Task RunActuationLoop(BridgeConfig config, CancellationToken ct) {
                 }
             }
         } catch (Exception ex) {
-            Console.WriteLine($"[ACTUATION] Error: {ex.Message}");
+            Console.WriteLine($"[ACTUATION] Error in loop: {ex.Message}");
         }
         await Task.Delay(2000, ct);
     }
