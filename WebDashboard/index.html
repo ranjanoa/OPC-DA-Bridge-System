@@ -10,72 +10,98 @@
         .window-scroll::-webkit-scrollbar { width: 4px; }
         .window-scroll::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
         .glass { background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.08); display: flex; flex-direction: column; }
+        .collapsible-content { transition: max-height 0.3s ease-out; overflow: hidden; }
+        .rotate-icon { transition: transform 0.3s; }
+        .is-closed .rotate-icon { transform: rotate(-90deg); }
+        .is-closed .collapsible-content { max-height: 0 !important; }
     </style>
 </head>
 <body class="p-6 flex flex-col">
     <header class="flex justify-between items-center mb-6 pb-4 border-b border-white/5">
-        <h1 class="text-xl font-bold bg-gradient-to-r from-sky-400 to-indigo-400 bg-clip-text text-transparent">Industrial Gateway</h1>
-        <div id="statusBadge" class="flex items-center space-x-2 px-3 py-1 bg-slate-900 rounded-full border border-white/5">
+        <div class="flex items-center space-x-3">
+            <div class="w-8 h-8 bg-sky-500/20 rounded-lg flex items-center justify-center text-sky-400 border border-sky-500/30">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+            </div>
+            <h1 class="text-xl font-bold bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">Industrial Gateway</h1>
+        </div>
+        <div id="statusBadge" class="flex items-center space-x-2 px-3 py-1.5 bg-slate-900 rounded-full border border-white/5">
             <div id="statusLed" class="w-2 h-2 rounded-full bg-slate-600 transition-colors"></div>
             <span id="statusText" class="text-[9px] font-bold uppercase text-slate-500 tracking-widest">Idle</span>
         </div>
     </header>
 
-    <main class="grid grid-cols-1 md:grid-cols-4 gap-4 h-[calc(100vh-120px)]">
-        <!-- Panel 1: Config -->
-        <div class="space-y-4">
+    <main class="grid grid-cols-1 md:grid-cols-12 gap-4 h-[calc(100vh-120px)]">
+        <!-- Panel 1: Connection & DB (3 cols) -->
+        <div class="md:col-span-3 space-y-4 flex flex-col">
             <section class="glass p-5 rounded-2xl">
-                <h2 class="text-[10px] font-bold text-sky-400 uppercase mb-4 tracking-widest">Connection</h2>
+                <h2 class="text-[10px] font-bold text-sky-400 uppercase mb-4 tracking-widest">OPC Connection</h2>
                 <div class="space-y-3">
                     <input id="host" type="text" placeholder="Host IP" class="w-full bg-slate-950 border border-white/10 rounded-xl p-2.5 text-xs outline-none focus:border-sky-500">
                     <input id="progId" type="text" placeholder="OPC ProgID" class="w-full bg-slate-950 border border-white/10 rounded-xl p-2.5 text-xs outline-none focus:border-sky-500">
-                    <button onclick="browse()" class="w-full bg-sky-600 hover:bg-sky-500 py-2.5 rounded-xl font-bold text-xs">Discover Tags</button>
+                    <button onclick="browse()" class="w-full bg-sky-600 hover:bg-sky-500 py-2.5 rounded-xl font-bold text-xs transition-all">Discover Tags</button>
                 </div>
             </section>
             <section class="glass p-5 rounded-2xl flex-grow overflow-hidden flex flex-col">
                 <h2 class="text-[10px] font-bold text-emerald-400 uppercase mb-4 tracking-widest">Database</h2>
                 <div class="space-y-3 flex-grow overflow-y-auto pr-1 window-scroll">
-                    <input id="token" type="password" placeholder="Token" class="w-full bg-slate-950 border border-white/10 rounded-xl p-2.5 text-xs outline-none">
-                    <input id="org" type="text" placeholder="Org" class="w-full bg-slate-950 border border-white/10 rounded-xl p-2.5 text-xs outline-none">
-                    <input id="bucket" type="text" placeholder="Bucket" class="w-full bg-slate-950 border border-white/10 rounded-xl p-2.5 text-xs outline-none">
-                    <button onclick="startBridge()" class="w-full bg-emerald-600 hover:bg-emerald-500 py-2.5 rounded-xl font-bold text-xs">Apply & Start</button>
-                    <button onclick="stopBridge()" class="w-full bg-slate-800 py-2 rounded-xl text-[10px] text-slate-400">Stop</button>
+                    <input id="token" type="password" placeholder="Influx Token" class="w-full bg-slate-950 border border-white/10 rounded-xl p-2.5 text-xs outline-none">
+                    <input id="org" type="text" placeholder="Organization" class="w-full bg-slate-950 border border-white/10 rounded-xl p-2.5 text-xs outline-none">
+                    <input id="bucket" type="text" placeholder="Bucket Name" class="w-full bg-slate-950 border border-white/10 rounded-xl p-2.5 text-xs outline-none">
+                    <button onclick="startBridge()" class="w-full bg-emerald-600 hover:bg-emerald-500 py-2.5 rounded-xl font-bold text-xs shadow-lg shadow-emerald-900/20">Apply & Start</button>
+                    <button onclick="stopBridge()" class="w-full bg-slate-800 py-2 rounded-xl text-[10px] text-slate-400">Stop Service</button>
                 </div>
             </section>
         </div>
 
-        <!-- Panel 2: Browser -->
-        <div class="glass rounded-2xl h-full flex flex-col">
+        <!-- Panel 2: Address Space (3 cols) -->
+        <div class="md:col-span-3 glass rounded-2xl h-full flex flex-col">
             <div class="p-4 border-b border-white/5 bg-white/5 font-bold text-[10px] uppercase text-amber-500 tracking-widest">Address Space</div>
             <div id="tree" class="flex-grow p-4 text-[11px] window-scroll overflow-y-auto font-mono"></div>
         </div>
 
-        <!-- Panel 3: Mapping -->
-        <div class="glass rounded-2xl h-full flex flex-col">
-            <div class="p-4 border-b border-white/5 bg-white/5 flex justify-between items-center">
-                <span class="font-bold text-[10px] uppercase text-fuchsia-400 tracking-widest">Actuation Map</span>
-                <div class="flex space-x-2">
-                    <button onclick="exportToCSV()" class="text-[9px] font-bold text-slate-500 hover:text-white uppercase">Export</button>
-                    <button onclick="document.getElementById('csvIn').click()" class="text-[9px] font-bold text-slate-500 hover:text-white uppercase">Import</button>
-                    <input type="file" id="csvIn" class="hidden" accept=".csv" onchange="importFromCSV(this)">
+        <!-- Panel 3: Mapping Center (3 cols) -->
+        <div class="md:col-span-3 space-y-4 flex flex-col overflow-hidden">
+            <!-- Telemetry Dropdown -->
+            <div id="telemetrySection" class="glass rounded-2xl flex flex-col overflow-hidden">
+                <div onclick="toggleSection('telemetrySection')" class="p-4 bg-white/5 border-b border-white/5 flex justify-between items-center cursor-pointer hover:bg-white/10 transition-colors">
+                    <h2 class="text-[10px] font-bold uppercase text-indigo-400 tracking-widest">Telemetry (kiln1)</h2>
+                    <svg class="w-4 h-4 rotate-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+                </div>
+                <div class="collapsible-content flex-grow flex flex-col" style="max-height: 500px;">
+                    <div id="readMappingList" class="p-4 space-y-3 window-scroll overflow-y-auto flex-grow"></div>
                 </div>
             </div>
-            <div id="mappingList" class="flex-grow p-4 space-y-3 window-scroll overflow-y-auto"></div>
+
+            <!-- Actuation Dropdown -->
+            <div id="actuationSection" class="glass rounded-2xl flex flex-col overflow-hidden">
+                <div onclick="toggleSection('actuationSection')" class="p-4 bg-white/5 border-b border-white/5 flex justify-between items-center cursor-pointer hover:bg-white/10 transition-colors">
+                    <h2 class="text-[10px] font-bold uppercase text-fuchsia-400 tracking-widest">Actuation (kiln2)</h2>
+                    <svg class="w-4 h-4 rotate-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" /></svg>
+                </div>
+                <div class="collapsible-content flex-grow flex flex-col" style="max-height: 500px;">
+                    <div id="writeMappingList" class="p-4 space-y-3 window-scroll overflow-y-auto flex-grow"></div>
+                </div>
+            </div>
         </div>
 
-        <!-- Panel 4: Telemetry -->
-        <div class="glass rounded-2xl h-full flex flex-col">
-            <div class="p-4 border-b border-white/5 bg-white/5 font-bold text-[10px] uppercase text-indigo-400 tracking-widest">Live Telemetry (kiln1)</div>
+        <!-- Panel 4: Telemetry (3 cols) -->
+        <div class="md:col-span-3 glass rounded-2xl h-full flex flex-col">
+            <div class="p-4 border-b border-white/5 bg-white/5 font-bold text-[10px] uppercase text-slate-400 tracking-widest">Live Monitor</div>
             <div id="monitor" class="flex-grow p-4 space-y-2 window-scroll overflow-y-auto"></div>
         </div>
     </main>
 
     <script>
         const BASE_URL = "http://localhost:5005";
-        let selectedTagsMetadata = {};
+        let readMapping = {};  // Physical -> Alias (kiln1)
+        let writeMapping = {}; // Alias -> Physical (kiln2)
         let isBridgeRunning = false;
 
         window.onload = loadConfig;
+
+        function toggleSection(id) {
+            document.getElementById(id).classList.toggle('is-closed');
+        }
 
         async function loadConfig() {
             try {
@@ -87,28 +113,33 @@
                     document.getElementById('token').value = cfg.influxToken || '';
                     document.getElementById('org').value = cfg.influxOrg || '';
                     document.getElementById('bucket').value = cfg.influxBucket || '';
+                    
+                    // Load existing mappings
+                    readMapping = cfg.readMapping || {};
+                    writeMapping = cfg.writeMapping || {};
+                    
+                    // Tags might exist in ReadTags but not yet in ReadMapping
                     if (cfg.readTags) {
-                        cfg.readTags.forEach(id => {
-                            let alias = id;
-                            if (cfg.writeMapping) for (let key in cfg.writeMapping) if (cfg.writeMapping[key] === id) alias = key;
-                            selectedTagsMetadata[id] = { influxField: alias };
-                        });
-                        renderMappingUI();
+                        cfg.readTags.forEach(id => { if (!readMapping[id]) readMapping[id] = id; });
                     }
+                    
+                    renderMappingUI();
                 }
             } catch (e) {}
             setInterval(checkLive, 1000);
         }
 
         async function removeTag(tagId) {
-            if (!confirm(`Permanently remove ${tagId} from JSON?`)) return;
+            if (!confirm(`Remove ${tagId} from configuration?`)) return;
             try {
                 const res = await fetch(`${BASE_URL}/api/config/tag?tagId=${encodeURIComponent(tagId)}`, { method: 'DELETE' });
                 if (res.ok) {
-                    delete selectedTagsMetadata[tagId];
+                    delete readMapping[tagId];
+                    // Also clean up any reverse write mapping if it pointed here
+                    for(let key in writeMapping) if(writeMapping[key] === tagId) delete writeMapping[key];
                     renderMappingUI();
                 }
-            } catch (e) { alert("Server unreachable"); }
+            } catch (e) { alert("Server error"); }
         }
 
         async function browse(nodeId = null) {
@@ -124,7 +155,7 @@
                 const div = document.createElement('div');
                 div.className = "pl-4 border-l border-white/5 my-1";
                 div.innerHTML = `<div class="flex items-center space-x-2">
-                    ${item.type === 'folder' ? `<button id="icon-${item.id}" class="text-sky-400" onclick="browse('${item.id}')">📁</button>` : `<input type="checkbox" onchange="toggleTag('${item.id}', this.checked)" ${selectedTagsMetadata[item.id] ? 'checked' : ''}>`}
+                    ${item.type === 'folder' ? `<button id="icon-${item.id}" class="text-sky-400" onclick="browse('${item.id}')">📁</button>` : `<input type="checkbox" onchange="toggleTag('${item.id}', this.checked)" ${readMapping[item.id] ? 'checked' : ''}>`}
                     <span class="truncate text-slate-400 text-[10px]">${item.name}</span>
                 </div><div id="child-${item.id}"></div>`;
                 container.appendChild(div);
@@ -133,21 +164,52 @@
         }
 
         function toggleTag(id, isChecked) {
-            if (isChecked) selectedTagsMetadata[id] = { influxField: id };
-            else delete selectedTagsMetadata[id];
+            if (isChecked) readMapping[id] = id;
+            else delete readMapping[id];
             renderMappingUI();
         }
 
         function renderMappingUI() {
-            const container = document.getElementById('mappingList');
-            const entries = Object.entries(selectedTagsMetadata);
-            if (!entries.length) { container.innerHTML = `<p class="text-[9px] text-slate-600 text-center mt-10">No tags active</p>`; return; }
-            container.innerHTML = entries.map(([id, meta]) => `
-                <div class="bg-slate-950 p-3 rounded-xl border border-white/5 relative group">
+            // Render Telemetry Map (Read)
+            const readContainer = document.getElementById('readMappingList');
+            const readEntries = Object.entries(readMapping);
+            readContainer.innerHTML = readEntries.length ? readEntries.map(([id, alias]) => `
+                <div class="bg-slate-950 p-3 rounded-xl border border-white/5 group relative">
                     <button onclick="removeTag('${id}')" class="absolute top-2 right-2 text-slate-700 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity">✕</button>
-                    <div class="text-[8px] text-slate-600 uppercase font-black truncate mb-1 pr-6">${id}</div>
-                    <input type="text" value="${meta.influxField}" oninput="selectedTagsMetadata['${id}'].influxField=this.value" class="w-full bg-slate-900 border border-white/5 rounded-lg p-1.5 text-[10px] outline-none focus:border-fuchsia-500">
-                </div>`).join('');
+                    <div class="text-[7px] text-slate-600 uppercase font-black truncate mb-1 pr-6">${id}</div>
+                    <div class="flex items-center space-x-2">
+                        <span class="text-[8px] text-indigo-400 font-bold">AS</span>
+                        <input type="text" value="${alias}" oninput="readMapping['${id}']=this.value" class="w-full bg-slate-900 border border-white/5 rounded-lg p-1.5 text-[10px] outline-none focus:border-indigo-500">
+                    </div>
+                    <div class="mt-2 flex items-center space-x-2">
+                        <input type="checkbox" onchange="toggleWriteMapping('${id}', this.checked)" ${Object.values(writeMapping).includes(id) ? 'checked' : ''} class="w-3 h-3">
+                        <span class="text-[8px] text-slate-500 uppercase">Enable Write Back (kiln2)</span>
+                    </div>
+                </div>`).join('') : '<p class="text-[9px] text-slate-600 text-center py-4">No tags selected</p>';
+
+            // Render Actuation Map (Write)
+            const writeContainer = document.getElementById('writeMappingList');
+            const writeEntries = Object.entries(writeMapping);
+            writeContainer.innerHTML = writeEntries.length ? writeEntries.map(([alias, id]) => `
+                <div class="bg-slate-900 p-3 rounded-xl border border-fuchsia-500/20">
+                    <div class="text-[7px] text-fuchsia-400 uppercase font-black mb-1">Incoming Alias (kiln2)</div>
+                    <input type="text" value="${alias}" oninput="updateWriteAlias('${alias}', this.value)" class="w-full bg-slate-950 border border-white/5 rounded-lg p-1.5 text-[10px] outline-none focus:border-fuchsia-500">
+                    <div class="mt-1 text-[7px] text-slate-600 truncate">TARGET: ${id}</div>
+                </div>`).join('') : '<p class="text-[9px] text-slate-600 text-center py-4">Enable write-back on telemetry tags</p>';
+        }
+
+        function toggleWriteMapping(id, isChecked) {
+            if (isChecked) writeMapping[id + "_SP"] = id;
+            else {
+                for(let key in writeMapping) if(writeMapping[key] === id) delete writeMapping[key];
+            }
+            renderMappingUI();
+        }
+
+        function updateWriteAlias(oldAlias, newAlias) {
+            const id = writeMapping[oldAlias];
+            delete writeMapping[oldAlias];
+            writeMapping[newAlias] = id;
         }
 
         async function startBridge() {
@@ -158,16 +220,21 @@
                 influxToken: document.getElementById('token').value,
                 influxOrg: document.getElementById('org').value,
                 influxBucket: document.getElementById('bucket').value,
-                readTags: Object.keys(selectedTagsMetadata),
-                writeMapping: Object.fromEntries(Object.entries(selectedTagsMetadata).map(([id, m]) => [m.influxField, id]))
+                readTags: Object.keys(readMapping),
+                readMapping: readMapping,
+                writeMapping: writeMapping
             };
-            const res = await fetch(`${BASE_URL}/api/bridge/start`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(config) });
-            if (res.ok) { isBridgeRunning = true; updateUI(); }
+            const res = await fetch(`${BASE_URL}/api/bridge/start`, { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify(config) 
+            });
+            if (res.ok) { isBridgeRunning = true; updateStatusUI(); }
         }
 
-        async function stopBridge() { await fetch(`${BASE_URL}/api/bridge/stop`, { method: 'POST' }); isBridgeRunning = false; updateUI(); }
+        async function stopBridge() { await fetch(`${BASE_URL}/api/bridge/stop`, { method: 'POST' }); isBridgeRunning = false; updateStatusUI(); }
 
-        function updateUI() {
+        function updateStatusUI() {
             const led = document.getElementById('statusLed'), text = document.getElementById('statusText');
             led.className = `w-2 h-2 rounded-full ${isBridgeRunning ? 'bg-emerald-500 animate-pulse' : 'bg-slate-600'}`;
             text.innerText = isBridgeRunning ? "Active" : "Idle";
@@ -179,41 +246,17 @@
                 const res = await fetch(`${BASE_URL}/api/live`);
                 const data = await res.json();
                 const container = document.getElementById('monitor');
-                const selectedIds = Object.keys(selectedTagsMetadata);
+                const selectedIds = Object.keys(readMapping);
                 if (!selectedIds.length) { container.innerHTML = ""; return; }
                 container.innerHTML = selectedIds.map(id => {
                     const val = data[id];
                     const display = val !== undefined ? (typeof val === 'number' ? val.toFixed(2) : val) : '<span class="text-slate-700">Waiting...</span>';
                     return `<div class="flex justify-between p-2.5 bg-slate-950/50 rounded-xl border border-white/5">
-                        <span class="text-[9px] text-slate-400 truncate w-32">${id.split('.').pop()}</span>
+                        <span class="text-[9px] text-slate-400 truncate w-32">${readMapping[id] || id.split('.').pop()}</span>
                         <span class="font-mono text-[10px] font-bold text-sky-400">${display}</span>
                     </div>`;
                 }).join('');
             } catch(e) {}
-        }
-
-        function exportToCSV() {
-            const data = Object.entries(selectedTagsMetadata).map(([id, meta]) => `"${id}","${meta.influxField}"`).join("\n");
-            const blob = new Blob(["OPC_Tag,Influx_Field\n" + data], { type: 'text/csv' });
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a'); a.setAttribute('href', url); a.setAttribute('download', 'opc_config.csv'); a.click();
-        }
-
-        function importFromCSV(input) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const rows = e.target.result.split("\n").slice(1);
-                selectedTagsMetadata = {};
-                rows.forEach(row => {
-                    const parts = row.split(",");
-                    if(parts.length >= 2) {
-                        const id = parts[0].replace(/"/g, ""), field = parts[1].replace(/"/g, "");
-                        selectedTagsMetadata[id] = { influxField: field };
-                    }
-                });
-                renderMappingUI();
-            };
-            reader.readAsText(input.files[0]);
         }
     </script>
 </body>
