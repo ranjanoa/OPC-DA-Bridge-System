@@ -21,7 +21,7 @@ jobs:
     - name: Restore Dependencies
       run: dotnet restore GatewayService/OpcDaBridge.csproj
 
-    - name: Publish Gateway (Self-Contained x86)
+    - name: Publish Gateway Service (Self-Contained x86)
       run: |
         dotnet publish GatewayService/OpcDaBridge.csproj `
           -c Release `
@@ -29,18 +29,24 @@ jobs:
           --self-contained true `
           -o publish/
 
-    - name: Prepare Dashboard for Installer
+    - name: Prepare Assets for Installer
+      shell: pwsh
       run: |
-        xcopy /Y WebDashboard\index.html publish\
-        xcopy /Y GatewayService\bridge_settings.json publish\
+        # Copy the Dashboard HTML
+        if (Test-Path "WebDashboard/index.html") {
+          copy "WebDashboard/index.html" "publish/"
+        }
+        # Copy the settings template
+        if (Test-Path "GatewayService/bridge_settings.json") {
+          copy "GatewayService/bridge_settings.json" "publish/"
+        }
 
     - name: Compile Inno Setup Installer
-      uses: secondlife/inno-setup-action@v1
-      with:
-        filepath: installer_script.iss
+      # ISCC is the Inno Setup compiler, pre-installed on GitHub Windows runners
+      run: iscc installer_script.iss
 
-    - name: Upload Installer
+    - name: Upload Installer Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: Windows-Installer
+        name: OPC-Bridge-Installer
         path: OPC_Bridge_Installer.exe
