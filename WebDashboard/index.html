@@ -2,45 +2,26 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Industrial OPC DA Gateway</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono&display=swap');
         
-        body { 
-            font-family: 'Inter', sans-serif; 
-            background-color: #020617; 
-            color: #e2e8f0; 
-            height: 100vh; 
-            overflow: hidden; 
-            margin: 0; 
-            display: flex;
-            flex-direction: column;
-        }
-
-        /* Custom Scrollbar Styling */
+        /* Layout & Scrollbars */
+        body { font-family: 'Inter', sans-serif; background-color: #020617; color: #e2e8f0; height: 100vh; overflow: hidden; margin: 0; }
         .window-scroll::-webkit-scrollbar { width: 4px; }
-        .window-scroll::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.02); }
         .window-scroll::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
-        .window-scroll::-webkit-scrollbar-thumb:hover { background: #475569; }
-
-        .glass { 
-            background: rgba(15, 23, 42, 0.6); 
-            backdrop-filter: blur(12px); 
-            border: 1px solid rgba(255, 255, 255, 0.08); 
-        }
-
+        .glass { background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.08); display: flex; flex-direction: column; }
+        
+        /* Accordion Animations */
         .is-closed .collapsible-content { max-height: 0 !important; padding: 0 !important; overflow: hidden; }
         .rotate-icon { transition: transform 0.3s; }
         .is-closed .rotate-icon { transform: rotate(-90deg); }
-        
-        /* Ensure containers don't collapse */
-        .flex-fixed-height { height: calc(100vh - 120px); }
     </style>
 </head>
-<body class="p-6">
-    <header class="flex justify-between items-center mb-6 pb-4 border-b border-white/5 shrink-0">
+<body class="p-6 flex flex-col">
+    <!-- Header -->
+    <header class="flex justify-between items-center mb-6 pb-4 border-b border-white/5">
         <h1 class="text-xl font-bold bg-gradient-to-r from-sky-400 to-indigo-400 bg-clip-text text-transparent">Industrial Gateway</h1>
         <div id="statusBadge" class="flex items-center space-x-2 px-3 py-1 bg-slate-900 rounded-full border border-white/5">
             <div id="statusLed" class="w-2 h-2 rounded-full bg-slate-600 transition-colors"></div>
@@ -48,15 +29,17 @@
         </div>
     </header>
 
-    <main class="grid grid-cols-1 md:grid-cols-12 gap-4 flex-grow flex-fixed-height overflow-hidden">
-        <!-- 1. Connection & DB Column -->
-        <div class="md:col-span-3 space-y-4 flex flex-col h-full overflow-hidden">
+    <!-- Main Grid -->
+    <main class="grid grid-cols-1 md:grid-cols-12 gap-4 h-[calc(100vh-120px)]">
+        
+        <!-- 1. Connection & Database (3 cols) -->
+        <div class="md:col-span-3 space-y-4 flex flex-col">
             <section class="glass p-5 rounded-2xl shrink-0">
                 <h2 class="text-[10px] font-bold text-sky-400 uppercase mb-4 tracking-widest">Connection</h2>
                 <div class="space-y-3">
                     <input id="host" type="text" placeholder="Host IP" class="w-full bg-slate-950 border border-white/10 rounded-xl p-2.5 text-xs outline-none focus:border-sky-500">
                     <input id="progId" type="text" placeholder="OPC ProgID" class="w-full bg-slate-950 border border-white/10 rounded-xl p-2.5 text-xs outline-none focus:border-sky-500">
-                    <button onclick="browse()" class="w-full bg-sky-600 hover:bg-sky-500 py-2.5 rounded-xl font-bold text-xs transition-colors">Discover Tags</button>
+                    <button onclick="browse()" class="w-full bg-sky-600 hover:bg-sky-500 py-2.5 rounded-xl font-bold text-xs shadow-lg transition-all active:scale-95">Discover Tags</button>
                 </div>
             </section>
             <section class="glass p-5 rounded-2xl flex-grow overflow-hidden flex flex-col">
@@ -65,54 +48,63 @@
                     <input id="token" type="password" placeholder="Token" class="w-full bg-slate-950 border border-white/10 rounded-xl p-2.5 text-xs outline-none">
                     <input id="org" type="text" placeholder="Org" class="w-full bg-slate-950 border border-white/10 rounded-xl p-2.5 text-xs outline-none">
                     <input id="bucket" type="text" placeholder="Bucket" class="w-full bg-slate-950 border border-white/10 rounded-xl p-2.5 text-xs outline-none">
-                    <button onclick="startBridge()" class="w-full bg-emerald-600 hover:bg-emerald-500 py-2.5 rounded-xl font-bold text-xs shadow-lg">Apply & Start</button>
-                    <button onclick="stopBridge()" class="w-full bg-slate-800 py-2 rounded-xl text-[10px] text-slate-400 mt-2">Stop</button>
+                    <button onclick="startBridge()" class="w-full bg-emerald-600 hover:bg-emerald-500 py-2.5 rounded-xl font-bold text-xs shadow-lg transition-all active:scale-95">Apply & Start</button>
+                    <button onclick="stopBridge()" class="w-full bg-slate-800 py-2 rounded-xl text-[10px] text-slate-400 mt-2">Stop Service</button>
                 </div>
             </section>
         </div>
 
-        <!-- 2. Address Space Column (With Fixed Scroll) -->
-        <div class="md:col-span-3 glass rounded-2xl h-full flex flex-col overflow-hidden">
-            <div class="p-4 border-b border-white/5 bg-white/5 font-bold text-[10px] uppercase text-amber-500 tracking-widest shrink-0">Address Space</div>
-            <div id="tree" class="flex-grow p-4 text-[11px] window-scroll overflow-y-auto font-mono">
-                <p class="text-slate-500 italic">Click discover to load tags...</p>
+        <!-- 2. Address Space Tree (3 cols) -->
+        <div class="md:col-span-3 glass rounded-2xl h-full flex flex-col">
+            <div class="p-4 border-b border-white/5 bg-white/5 font-bold text-[10px] uppercase text-amber-500 tracking-widest">Address Space</div>
+            <div id="tree" class="flex-grow p-4 text-[11px] window-scroll overflow-y-auto font-mono"></div>
+        </div>
+
+        <!-- 3. Mapping Center (3 cols) -->
+        <div class="md:col-span-3 space-y-4 flex flex-col overflow-hidden">
+            <div class="glass rounded-2xl flex flex-col overflow-hidden flex-grow">
+                <!-- CSV Controls Header -->
+                <div class="p-4 bg-white/5 border-b border-white/5 flex justify-between items-center">
+                    <h2 class="text-[10px] font-bold uppercase text-fuchsia-400 tracking-widest">Mapping Center</h2>
+                    <div class="flex space-x-2">
+                        <button onclick="exportCombinedCSV()" class="text-[9px] font-bold text-slate-500 hover:text-white uppercase transition-colors">Export CSV</button>
+                        <button onclick="document.getElementById('csvIn').click()" class="text-[9px] font-bold text-slate-500 hover:text-white uppercase transition-colors">Import CSV</button>
+                        <input type="file" id="csvIn" class="hidden" accept=".csv" onchange="importCombinedCSV(this)">
+                    </div>
+                </div>
+
+                <div class="flex-grow overflow-y-auto window-scroll space-y-4 p-4">
+                    <!-- Telemetry Section (Read) -->
+                    <div id="teleSection" class="bg-slate-900/50 rounded-xl border border-white/5 overflow-hidden">
+                        <div onclick="toggle('teleSection')" class="p-3 cursor-pointer flex justify-between items-center hover:bg-white/5 group transition-colors">
+                            <span class="text-[9px] font-bold text-indigo-400 uppercase">Telemetry (kiln1)</span>
+                            <div class="flex items-center space-x-4">
+                                <button onclick="event.stopPropagation(); clearMappings('telemetry')" class="text-[8px] text-slate-500 hover:text-rose-500 font-bold uppercase opacity-0 group-hover:opacity-100 transition-opacity bg-slate-900/80 px-2 py-0.5 rounded">Clear All</button>
+                                <span class="rotate-icon text-[8px] text-slate-500">▼</span>
+                            </div>
+                        </div>
+                        <div id="readMappingList" class="collapsible-content p-3 space-y-3 border-t border-white/5"></div>
+                    </div>
+
+                    <!-- Actuation Section (Write) -->
+                    <div id="actSection" class="bg-slate-900/50 rounded-xl border border-white/5 overflow-hidden">
+                        <div onclick="toggle('actSection')" class="p-3 cursor-pointer flex justify-between items-center hover:bg-white/5 group transition-colors">
+                            <span class="text-[9px] font-bold text-fuchsia-400 uppercase">Actuation (kiln2)</span>
+                            <div class="flex items-center space-x-4">
+                                <button onclick="event.stopPropagation(); clearMappings('actuation')" class="text-[8px] text-slate-500 hover:text-rose-500 font-bold uppercase opacity-0 group-hover:opacity-100 transition-opacity bg-slate-900/80 px-2 py-0.5 rounded">Clear All</button>
+                                <span class="rotate-icon text-[8px] text-slate-500">▼</span>
+                            </div>
+                        </div>
+                        <div id="writeMappingList" class="collapsible-content p-3 space-y-3 border-t border-white/5"></div>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <!-- 3. Mapping Center Column -->
-        <div class="md:col-span-3 glass rounded-2xl flex flex-col h-full overflow-hidden">
-            <div class="p-4 bg-white/5 border-b border-white/5 flex justify-between items-center shrink-0">
-                <h2 class="text-[10px] font-bold uppercase text-fuchsia-400 tracking-widest">Mappings</h2>
-                <div class="flex space-x-2">
-                    <button onclick="exportCombinedCSV()" class="text-[9px] font-bold text-slate-500 hover:text-white uppercase">Export</button>
-                    <button onclick="document.getElementById('csvIn').click()" class="text-[9px] font-bold text-slate-500 hover:text-white uppercase">Import</button>
-                    <input type="file" id="csvIn" class="hidden" accept=".csv" onchange="importCombinedCSV(this)">
-                </div>
-            </div>
-            <div class="flex-grow overflow-y-auto window-scroll space-y-4 p-4">
-                <div id="teleSection" class="bg-slate-900/50 rounded-xl border border-white/5 overflow-hidden">
-                    <div onclick="toggle('teleSection')" class="p-3 cursor-pointer flex justify-between items-center hover:bg-white/5">
-                        <span class="text-[9px] font-bold text-indigo-400 uppercase">Telemetry (kiln1)</span>
-                        <span class="rotate-icon text-[8px]">▼</span>
-                    </div>
-                    <div id="readMappingList" class="collapsible-content p-3 space-y-3 border-t border-white/5"></div>
-                </div>
-                <div id="actSection" class="bg-slate-900/50 rounded-xl border border-white/5 overflow-hidden">
-                    <div onclick="toggle('actSection')" class="p-3 cursor-pointer flex justify-between items-center hover:bg-white/5">
-                        <span class="text-[9px] font-bold text-fuchsia-400 uppercase">Actuation (kiln2)</span>
-                        <span class="rotate-icon text-[8px]">▼</span>
-                    </div>
-                    <div id="writeMappingList" class="collapsible-content p-3 space-y-3 border-t border-white/5"></div>
-                </div>
-            </div>
-        </div>
-
-        <!-- 4. Live Monitor Column (With Fixed Scroll) -->
-        <div class="md:col-span-3 glass rounded-2xl h-full flex flex-col overflow-hidden">
-            <div class="p-4 border-b border-white/5 bg-white/5 font-bold text-[10px] uppercase text-indigo-400 tracking-widest shrink-0">Live Monitor</div>
-            <div id="monitor" class="flex-grow p-4 space-y-2 window-scroll overflow-y-auto">
-                <p class="text-slate-500 text-[10px] italic">Live values appear here...</p>
-            </div>
+        <!-- 4. Live Monitor (3 cols) -->
+        <div class="md:col-span-3 glass rounded-2xl h-full flex flex-col">
+            <div class="p-4 border-b border-white/5 bg-white/5 font-bold text-[10px] uppercase text-indigo-400 tracking-widest">Live Monitor</div>
+            <div id="monitor" class="flex-grow p-4 space-y-2 window-scroll overflow-y-auto"></div>
         </div>
     </main>
 
@@ -136,73 +128,153 @@
                     document.getElementById('token').value = cfg.influxToken || '';
                     document.getElementById('org').value = cfg.influxOrg || '';
                     document.getElementById('bucket').value = cfg.influxBucket || '';
+                    
                     readMapping = cfg.readMapping || {};
                     writeMapping = cfg.writeMapping || {};
+                    
+                    if (cfg.readTags) {
+                        cfg.readTags.forEach(id => { if (!readMapping[id]) readMapping[id] = id; });
+                    }
                     renderMappingUI();
                 }
             } catch (e) {}
             setInterval(checkLive, 1000);
         }
 
+        async function removeTag(tagId) {
+            if (!confirm(`Delete ${tagId} from config?`)) return;
+            try {
+                const res = await fetch(`${BASE_URL}/api/config/tag?tagId=${encodeURIComponent(tagId)}`, { method: 'DELETE' });
+                if (res.ok) {
+                    delete readMapping[tagId];
+                    // Also remove reverse write mapping
+                    for(let k in writeMapping) if(writeMapping[k] === tagId) delete writeMapping[k];
+                    renderMappingUI();
+                }
+            } catch (e) { alert("Server error"); }
+        }
+
+        async function clearMappings(type) {
+            if (!confirm(`Clear all ${type} mappings?`)) return;
+            if (type === 'telemetry') {
+                readMapping = {};
+                writeMapping = {}; // Clearing read usually invalidates writes
+                // Uncheck tree items visually if they exist in DOM
+                const treeChecks = document.querySelectorAll('#tree input[type="checkbox"]');
+                treeChecks.forEach(cb => cb.checked = false);
+            } else if (type === 'actuation') {
+                writeMapping = {};
+            }
+            renderMappingUI();
+            await saveCurrentState(); // Persist deletion immediately
+        }
+
+        async function saveCurrentState() {
+            const config = {
+                opcHost: document.getElementById('host').value,
+                opcProgId: document.getElementById('progId').value,
+                influxUrl: "http://localhost:8086",
+                influxToken: document.getElementById('token').value,
+                influxOrg: document.getElementById('org').value,
+                influxBucket: document.getElementById('bucket').value,
+                readTags: Object.keys(readMapping),
+                readMapping: readMapping,
+                writeMapping: writeMapping
+            };
+            try {
+                await fetch(`${BASE_URL}/api/config/save`, { 
+                    method: 'POST', 
+                    headers: {'Content-Type': 'application/json'}, 
+                    body: JSON.stringify(config) 
+                });
+            } catch(e) {}
+        }
+
         async function browse(nodeId = null) {
-            const host = document.getElementById('host').value, progId = document.getElementById('progId').value;
-            const res = await fetch(`${BASE_URL}/api/browse?host=${host}&progId=${progId}${nodeId ? '&nodeId='+encodeURIComponent(nodeId) : ''}`);
+            if (nodeId) {
+                const child = document.getElementById(`child-${nodeId}`), icon = document.getElementById(`icon-${nodeId}`);
+                if (child && child.innerHTML.trim() !== "") { child.innerHTML = ""; if (icon) icon.innerText = "📁"; return; }
+            }
+            const res = await fetch(`${BASE_URL}/api/browse?host=${document.getElementById('host').value}&progId=${document.getElementById('progId').value}${nodeId ? '&nodeId='+encodeURIComponent(nodeId) : ''}`);
             const data = await res.json();
             const container = nodeId ? document.getElementById(`child-${nodeId}`) : document.getElementById('tree');
             container.innerHTML = '';
             data.forEach(item => {
                 const div = document.createElement('div');
                 div.className = "pl-4 border-l border-white/5 my-1";
-                div.innerHTML = `<div class="flex items-center space-x-2 py-0.5">
-                    ${item.type === 'folder' ? `<button class="text-sky-400 hover:scale-110 transition-transform" onclick="browse('${item.id}')">📁</button>` : `<input type="checkbox" onchange="toggleTag('${item.id}', this.checked)" ${readMapping[item.id] ? 'checked' : ''} class="w-3 h-3 rounded bg-slate-900 border-white/10">`}
-                    <span class="truncate text-slate-400 text-[10px] select-none cursor-default">${item.name}</span>
+                div.innerHTML = `<div class="flex items-center space-x-2">
+                    ${item.type === 'folder' ? `<button id="icon-${item.id}" class="text-sky-400 hover:text-sky-300 transition-colors" onclick="browse('${item.id}')">📁</button>` : `<input type="checkbox" onchange="toggleTag('${item.id}', this.checked)" ${readMapping[item.id] ? 'checked' : ''} class="accent-indigo-500 cursor-pointer">`}
+                    <span class="truncate text-slate-400 text-[10px] select-none">${item.name}</span>
                 </div><div id="child-${item.id}"></div>`;
                 container.appendChild(div);
             });
+            if (nodeId && document.getElementById(`icon-${nodeId}`)) document.getElementById(`icon-${nodeId}`).innerText = "📂";
         }
 
         function toggleTag(id, checked) {
-            if (checked) readMapping[id] = id;
-            else {
+            if (checked) {
+                if(!readMapping[id]) readMapping[id] = id;
+            } else {
                 delete readMapping[id];
                 for(let k in writeMapping) if(writeMapping[k] === id) delete writeMapping[k];
             }
             renderMappingUI();
+            saveCurrentState(); // Auto-save on check/uncheck
         }
 
         function renderMappingUI() {
             const readList = document.getElementById('readMappingList');
             const writeList = document.getElementById('writeMappingList');
             
+            // 1. Render Telemetry (Read)
             const rEntries = Object.entries(readMapping);
             readList.innerHTML = rEntries.length ? rEntries.map(([id, alias]) => `
-                <div class="bg-slate-950 p-3 rounded-xl border border-white/5 relative">
-                    <div class="text-[7px] text-slate-600 uppercase font-black mb-1 truncate pr-4">${id}</div>
-                    <input type="text" value="${alias}" oninput="readMapping['${id}']=this.value" class="w-full bg-slate-900 border border-white/5 rounded p-1 text-[10px] outline-none focus:border-indigo-500">
-                    <div class="mt-2 flex items-center space-x-2">
-                        <input type="checkbox" onchange="toggleWrite('${id}', this.checked)" ${Object.values(writeMapping).includes(id) ? 'checked' : ''} class="w-3 h-3">
-                        <span class="text-[8px] text-slate-500">Enable Actuation</span>
+                <div class="bg-slate-950 p-3 rounded-xl border border-white/5 relative group hover:border-indigo-500/30 transition-colors">
+                    <button onclick="removeTag('${id}')" class="absolute top-2 right-2 text-slate-600 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity font-bold px-2">✕</button>
+                    <div class="text-[7px] text-slate-600 uppercase font-black mb-1 truncate pr-6">${id}</div>
+                    <div class="flex items-center space-x-2">
+                        <span class="text-[8px] text-indigo-400 font-bold">AS</span>
+                        <input type="text" value="${alias}" onchange="readMapping['${id}']=this.value; saveCurrentState()" class="w-full bg-slate-900 border border-white/5 rounded-lg p-1.5 text-[10px] outline-none focus:border-indigo-500 text-slate-200">
                     </div>
-                </div>`).join('') : '<p class="text-[9px] text-slate-700 text-center">No tags mapped</p>';
+                    <div class="mt-2 flex items-center space-x-2">
+                        <input type="checkbox" onchange="toggleWrite('${id}', this.checked)" ${Object.values(writeMapping).includes(id) ? 'checked' : ''} class="w-3 h-3 rounded bg-slate-900 border-white/10 accent-fuchsia-500 cursor-pointer">
+                        <span class="text-[8px] text-slate-500 uppercase">Enable Write Back</span>
+                    </div>
+                </div>`).join('') : '<p class="text-[9px] text-slate-700 text-center py-4">No tags mapped</p>';
 
+            // 2. Render Actuation (Write)
             const wEntries = Object.entries(writeMapping);
             writeList.innerHTML = wEntries.length ? wEntries.map(([alias, id]) => `
-                <div class="bg-slate-950 p-3 rounded-xl border border-fuchsia-500/20">
+                <div class="bg-slate-950 p-3 rounded-xl border border-fuchsia-500/20 group relative hover:border-fuchsia-500/40 transition-colors">
+                    <button onclick="removeWriteMapping('${alias}')" class="absolute top-2 right-2 text-slate-600 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity font-bold px-2">✕</button>
                     <div class="text-[7px] text-fuchsia-400 uppercase font-black mb-1">Incoming Alias (kiln2)</div>
-                    <input type="text" value="${alias}" oninput="updateWriteAlias('${alias}', this.value)" class="w-full bg-slate-900 border border-white/5 rounded p-1 text-[10px] outline-none focus:border-fuchsia-500">
-                    <div class="mt-1 text-[7px] text-slate-700 truncate">${id}</div>
-                </div>`).join('') : '<p class="text-[9px] text-slate-700 text-center italic">Enable actuation in telemetry list</p>';
+                    <input type="text" value="${alias}" onchange="updateWriteAlias('${alias}', this.value)" class="w-full bg-slate-900 border border-white/5 rounded-lg p-1.5 text-[10px] outline-none focus:border-fuchsia-500 text-slate-200">
+                    <div class="mt-1 text-[7px] text-slate-700 truncate font-mono">TARGET: ${id}</div>
+                </div>`).join('') : '<p class="text-[9px] text-slate-700 text-center italic py-4">Enable actuation above</p>';
         }
 
         function toggleWrite(id, checked) {
             if (checked) writeMapping[id + "_SP"] = id;
             else for(let k in writeMapping) if(writeMapping[k] === id) delete writeMapping[k];
             renderMappingUI();
+            saveCurrentState();
         }
 
-        function updateWriteAlias(old, newVal) { const id = writeMapping[old]; delete writeMapping[old]; writeMapping[newVal] = id; }
+        function updateWriteAlias(old, newVal) { 
+            const id = writeMapping[old]; 
+            delete writeMapping[old]; 
+            writeMapping[newVal] = id; 
+            saveCurrentState(); 
+        }
+        
+        function removeWriteMapping(alias) {
+            delete writeMapping[alias];
+            renderMappingUI();
+            saveCurrentState();
+        }
 
         async function startBridge() {
+            await saveCurrentState(); 
             const config = {
                 opcHost: document.getElementById('host').value,
                 opcProgId: document.getElementById('progId').value,
@@ -232,13 +304,16 @@
                 const res = await fetch(`${BASE_URL}/api/live`);
                 const data = await res.json();
                 const container = document.getElementById('monitor');
-                const ids = Object.keys(readMapping);
-                if (!ids.length) { container.innerHTML = '<p class="text-slate-500 text-[10px] italic">No tags being monitored</p>'; return; }
-                container.innerHTML = ids.map(id => {
+                const selectedIds = Object.keys(readMapping);
+                if (!selectedIds.length) { container.innerHTML = '<p class="text-center text-slate-600 text-[10px] mt-10 italic">No live data</p>'; return; }
+                container.innerHTML = selectedIds.map(id => {
                     const val = data[id];
-                    return `<div class="flex justify-between items-center p-2 bg-slate-950/50 rounded-lg border border-white/5">
-                        <span class="text-[9px] text-slate-400 truncate w-2/3">${readMapping[id] || id}</span>
-                        <span class="font-mono text-[10px] font-bold text-sky-400 bg-sky-400/5 px-2 py-0.5 rounded">${val !== undefined ? (typeof val === 'number' ? val.toFixed(3) : val) : '...'}</span>
+                    return `<div class="flex justify-between items-center p-2 bg-slate-950/50 rounded-lg border border-white/5 group hover:bg-slate-900 transition-colors">
+                        <span class="text-[9px] text-slate-400 truncate w-32" title="${id}">${readMapping[id] || id.split('.').pop()}</span>
+                        <div class="flex items-center space-x-2">
+                            <span class="mono text-[10px] font-bold text-sky-400">${val !== undefined ? (typeof val === 'number' ? val.toFixed(3) : val) : '...'}</span>
+                            <button onclick="removeTag('${id}')" class="text-slate-700 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-opacity font-bold text-xs px-1">✕</button>
+                        </div>
                     </div>`;
                 }).join('');
             } catch(e) {}
@@ -250,7 +325,7 @@
             Object.entries(writeMapping).forEach(([alias, id]) => csv += `ACTUATION,"${id}","${alias}"\n`);
             const blob = new Blob([csv], { type: 'text/csv' });
             const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a'); a.href = url; a.download = `gateway_config_${new Date().toISOString().slice(0,10)}.csv`; a.click();
+            const a = document.createElement('a'); a.href = url; a.download = 'gateway_config.csv'; a.click();
         }
 
         function importCombinedCSV(input) {
@@ -266,6 +341,7 @@
                     }
                 });
                 renderMappingUI();
+                saveCurrentState(); // Save imported state immediately
             };
             reader.readAsText(input.files[0]);
         }
