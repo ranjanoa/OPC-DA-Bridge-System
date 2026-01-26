@@ -1,0 +1,12 @@
+{
+  "Version": 1,
+  "Hash": "wzyMccCg3Srru8SQw82LzvCEY9h2i90GM7JL6xGrD70=",
+  "Source": "OpcDaBridge",
+  "BasePath": "_content/OpcDaBridge",
+  "Mode": "Default",
+  "ManifestType": "Build",
+  "ReferencedProjectsConfiguration": [],
+  "DiscoveryPatterns": [],
+  "Assets": [],
+  "Endpoints": []
+}

@@ -1,0 +1,9 @@
+OPC-DA-Bridge-System/
+├── .github/workflows/build_installer.yml
+├── GatewayService/│   ├── Program.cs│   └── OpcDaBridge.csproj
+├── WebDashboard/│   └── index.html             <-- Keep it here!
+├── .gitignore
+├── README.md
+├── installer_script.iss
+└── build_and_publish.bat
+
