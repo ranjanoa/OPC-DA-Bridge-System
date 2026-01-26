@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("OpcDaBridge")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+1b81e8e0a4d96a3083c8ec55eab3ced1371915fe")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+d6277c6c7e6df0f5066443295b25f51b3c6f08dd")]
 [assembly: System.Reflection.AssemblyProductAttribute("OpcDaBridge")]
 [assembly: System.Reflection.AssemblyTitleAttribute("OpcDaBridge")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
