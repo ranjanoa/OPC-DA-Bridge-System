@@ -21,7 +21,14 @@ using InfluxDB.Client.Writes;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Enable CORS for Dashboard Communication
+// JSON Options: Force CamelCase so Frontend and Backend match perfectly
+var jsonOptions = new JsonSerializerOptions 
+{ 
+    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+    PropertyNameCaseInsensitive = true,
+    WriteIndented = true 
+};
+
 builder.Services.AddCors(options => 
     options.AddPolicy("AllowAll", p => p.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader()));
 
@@ -46,7 +53,7 @@ BridgeConfig? LoadConfigFromFile() {
         string path = GetSettingsPath();
         if (System.IO.File.Exists(path)) {
             string json = System.IO.File.ReadAllText(path);
-            return JsonSerializer.Deserialize<BridgeConfig>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            return JsonSerializer.Deserialize<BridgeConfig>(json, jsonOptions);
         }
     } catch (Exception ex) { Console.WriteLine($"[CONFIG] Load Error: {ex.Message}"); }
     return null;
@@ -55,7 +62,7 @@ BridgeConfig? LoadConfigFromFile() {
 void SaveConfigToFile(BridgeConfig config) {
     try {
         string path = GetSettingsPath();
-        string json = JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true });
+        string json = JsonSerializer.Serialize(config, jsonOptions);
         System.IO.File.WriteAllText(path, json);
         Console.WriteLine($"[CONFIG] Successfully saved to {path}");
     } catch (Exception ex) { Console.WriteLine($"[CONFIG] Save Error: {ex.Message}"); }
@@ -71,7 +78,7 @@ app.MapGet("/", () => {
     return Results.Text("index.html not found.");
 });
 
-app.MapGet("/api/config", () => LoadConfigFromFile() is BridgeConfig c ? Results.Ok(c) : Results.NotFound());
+app.MapGet("/api/config", () => LoadConfigFromFile() is BridgeConfig c ? Results.Json(c, jsonOptions) : Results.NotFound());
 
 app.MapPost("/api/config/save", (BridgeConfig config) => {
     SaveConfigToFile(config);
@@ -93,17 +100,12 @@ app.MapGet("/api/browse", (string host, string progId, string? nodeId) => {
 
 app.MapPost("/api/bridge/start", (BridgeConfig config) => {
     if (_bridgeActive) { _cts?.Cancel(); _bridgeActive = false; Thread.Sleep(500); }
-    
-    // Core Fix: Always persist the UI state to JSON when starting
     SaveConfigToFile(config); 
-    
     _bridgeActive = true;
     _cts = new CancellationTokenSource();
     _lastCommandProcessed = DateTime.UtcNow;
-    
     _ = Task.Run(() => RunIngestionLoop(config, _cts.Token));
     _ = Task.Run(() => RunActuationLoop(config, _cts.Token));
-    
     return Results.Ok(new { status = "Active" });
 });
 
@@ -117,13 +119,11 @@ app.MapPost("/api/bridge/stop", () => {
 app.MapDelete("/api/config/tag", (string tagId) => {
     var config = LoadConfigFromFile();
     if (config == null) return Results.NotFound();
-    
     var updated = config with { 
         ReadTags = config.ReadTags.Where(t => t != tagId).ToArray(),
         ReadMapping = config.ReadMapping?.Where(kv => kv.Key != tagId).ToDictionary(kv => kv.Key, kv => kv.Value),
         WriteMapping = config.WriteMapping?.Where(kv => kv.Value != tagId).ToDictionary(kv => kv.Key, kv => kv.Value)
     };
-    
     SaveConfigToFile(updated);
     _liveMonitor.TryRemove(tagId, out _);
     return Results.Ok(updated);
@@ -139,7 +139,6 @@ async Task RunIngestionLoop(BridgeConfig config, CancellationToken ct) {
     var group = _server!.AddGroup("Ingest_" + Guid.NewGuid().ToString().Substring(0, 8));
     group.UpdateRate = TimeSpan.FromMilliseconds(1000);
     group.AddItems(config.ReadTags.Select(t => new OpcDaItemDefinition { ItemId = t, IsActive = true }).ToArray());
-    
     while (!ct.IsCancellationRequested && _bridgeActive) {
         try {
             var results = group.Read(group.Items, OpcDaDataSource.Device);
@@ -161,7 +160,6 @@ async Task RunActuationLoop(BridgeConfig config, CancellationToken ct) {
     var queryApi = influx.GetQueryApi();
     var writeApi = influx.GetWriteApi();
     var writeGroup = _server!.AddGroup("Act_" + Guid.NewGuid().ToString().Substring(0, 8));
-    
     while (!ct.IsCancellationRequested && _bridgeActive) {
         try {
             string flux = $@"from(bucket: ""{config.InfluxBucket}"") |> range(start: -1m) |> filter(fn: (r) => r[""_measurement""] == ""kiln2"") |> last()";
@@ -176,7 +174,6 @@ async Task RunActuationLoop(BridgeConfig config, CancellationToken ct) {
                         var item = writeGroup.Items.FirstOrDefault(i => i.ItemId == tag) ?? writeGroup.AddItems(new[] { new OpcDaItemDefinition { ItemId = tag, IsActive = true } })[0].Item;
                         writeGroup.Write(new[] { item }, new[] { val });
                         _lastCommandProcessed = ts;
-                        
                         var feedback = PointData.Measurement("kiln2_feedback").Tag("status", "success").Tag("alias", alias).Field("value", Convert.ToDouble(val)).Timestamp(DateTime.UtcNow, WritePrecision.Ns);
                         writeApi.WritePoint(feedback, config.InfluxBucket, config.InfluxOrg);
                     }
@@ -186,7 +183,6 @@ async Task RunActuationLoop(BridgeConfig config, CancellationToken ct) {
         await Task.Delay(2000, ct);
     }
 }
-
 #endregion
 
 app.Run("http://localhost:5005");
