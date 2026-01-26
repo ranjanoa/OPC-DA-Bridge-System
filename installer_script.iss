@@ -4,17 +4,18 @@ AppName=Industrial OPC Bridge
 AppVersion=1.0
 DefaultDirName={autopf}\IndustrialOpcBridge
 DefaultGroupName=Industrial OPC Bridge
+; OutputDir is set to . so the GitHub Action can find the exe in the root
 OutputDir=.
 OutputBaseFilename=OPC_Bridge_Installer
 Compression=lzma
 SolidCompression=yes
-ArchitecturesInstallIn64BitMode=no
+; We removed ArchitecturesInstallIn64BitMode to default to 32-bit (x86) mode
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-; IMPORTANT: This looks for files in the 'publish' folder created by the build step
+; This looks for the files published by the GitHub Action
 Source: "publish\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
