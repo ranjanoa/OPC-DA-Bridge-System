@@ -1,1 +1,13 @@
 .NET artifactsbin/obj/*.user*.suo*.userosscache*.sln.docstatesPublish outputpublish/Configuration (Don't leak your real tokens to GitHub)bridge_settings.jsonVS Code.vscode/
+GatewayService/obj/OpcDaBridge.csproj.nuget.dgspec.json
+GatewayService/obj/OpcDaBridge.csproj.nuget.g.props
+GatewayService/obj/OpcDaBridge.csproj.nuget.g.targets
+GatewayService/obj/project.assets.json
+GatewayService/obj/project.nuget.cache
+GatewayService/obj/x86/Debug/net8.0-windows/.NETCoreApp,Version=v8.0.AssemblyAttributes.cs
+GatewayService/obj/x86/Debug/net8.0-windows/OpcDaBridge.AssemblyInfo.cs
+GatewayService/obj/x86/Debug/net8.0-windows/OpcDaBridge.AssemblyInfoInputs.cache
+GatewayService/obj/x86/Debug/net8.0-windows/OpcDaBridge.assets.cache
+GatewayService/obj/x86/Debug/net8.0-windows/OpcDaBridge.csproj.AssemblyReference.cache
+GatewayService/obj/x86/Debug/net8.0-windows/OpcDaBridge.GeneratedMSBuildEditorConfig.editorconfig
+GatewayService/obj/x86/Debug/net8.0-windows/OpcDaBridge.GlobalUsings.g.cs
