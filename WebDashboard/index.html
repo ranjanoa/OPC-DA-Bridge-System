@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Industrial OPC DA Gateway (Offline)</title>
     <style>
-        /* 1. LOCAL FONT STACK (Replacing Google Fonts) */
+        /* 1. LOCAL FONT STACK */
         :root {
             --bg-dark: #020617;
             --glass-bg: rgba(15, 23, 42, 0.6);
@@ -13,13 +13,16 @@
             --sky-400: #38bdf8;
             --emerald-500: #10b981;
             --fuchsia-400: #e879f9;
+            --indigo-400: #818cf8;
+            --rose-500: #f43f5e;
             --slate-400: #94a3b8;
+            --slate-600: #475569;
             --slate-900: #0f172a;
             --slate-950: #020617;
         }
 
         body { 
-            font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; 
             background-color: var(--bg-dark); 
             color: #e2e8f0; 
             height: 100vh; 
@@ -28,9 +31,10 @@
             display: flex;
             flex-direction: column;
             padding: 24px;
+            box-sizing: border-box;
         }
 
-        /* 2. REPLACING TAILWIND UTILITIES WITH CSS */
+        /* LAYOUT */
         .grid-container {
             display: grid;
             grid-template-columns: repeat(12, 1fr);
@@ -40,67 +44,71 @@
             overflow: hidden;
         }
 
-        .col-3 { grid-column: span 3; }
+        .col-3 { grid-column: span 3; display: flex; flex-direction: column; overflow: hidden; }
+        
         .glass { 
             background: var(--glass-bg); 
             backdrop-filter: blur(12px); 
             border: 1px solid var(--border-white); 
             border-radius: 16px;
-            display: flex;
-            flex-direction: column;
+            display: flex; 
+            flex-direction: column; 
             overflow: hidden;
         }
 
-        .window-scroll { overflow-y: auto; }
+        /* SCROLLBARS */
+        .window-scroll { overflow-y: auto; flex-grow: 1; }
         .window-scroll::-webkit-scrollbar { width: 4px; }
         .window-scroll::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.02); }
         .window-scroll::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
 
+        /* BUTTONS & INPUTS */
         .btn {
-            width: 100%;
-            padding: 10px;
-            border-radius: 12px;
-            font-weight: bold;
-            font-size: 12px;
-            cursor: pointer;
-            border: none;
-            transition: opacity 0.2s;
-            color: white;
+            width: 100%; padding: 10px; border-radius: 12px; font-weight: bold; font-size: 12px;
+            cursor: pointer; border: none; color: white; transition: opacity 0.2s;
         }
+        .btn:hover { opacity: 0.9; }
         .btn-sky { background: #0284c7; }
         .btn-emerald { background: #059669; }
         .btn-slate { background: #1e293b; color: #94a3b8; }
-        .btn:hover { opacity: 0.9; }
+        
+        /* Clear All Button */
+        .btn-clear {
+            background: rgba(15, 23, 42, 0.8); color: var(--slate-400); 
+            font-size: 9px; padding: 2px 6px; border-radius: 4px; border: none; cursor: pointer; text-transform: uppercase;
+        }
+        .btn-clear:hover { color: var(--rose-500); }
+
+        /* Delete X Button */
+        .btn-delete {
+            position: absolute; top: 8px; right: 8px; background: none; border: none;
+            color: var(--slate-600); font-weight: bold; cursor: pointer; font-size: 14px;
+        }
+        .btn-delete:hover { color: var(--rose-500); }
 
         input {
-            width: 100%;
-            background: var(--slate-950);
-            border: 1px solid var(--border-white);
-            border-radius: 8px;
-            padding: 10px;
-            color: white;
-            font-size: 12px;
-            margin-bottom: 8px;
-            box-sizing: border-box;
-            outline: none;
+            width: 100%; background: var(--slate-950); border: 1px solid var(--border-white);
+            border-radius: 8px; padding: 10px; color: white; font-size: 12px;
+            margin-bottom: 8px; box-sizing: border-box; outline: none;
         }
         input:focus { border-color: var(--sky-400); }
 
-        /* Animation & Logic Styles */
-        .is-closed .collapsible-content { max-height: 0 !important; padding: 0 !important; overflow: hidden; }
-        .rotate-icon { transition: transform 0.3s; display: inline-block; font-size: 8px; }
+        /* ANIMATIONS */
+        .is-closed .collapsible-content { max-height: 0 !important; padding: 0 !important; overflow: hidden; border: none !important; }
+        .rotate-icon { transition: transform 0.3s; display: inline-block; font-size: 10px; }
         .is-closed .rotate-icon { transform: rotate(-90deg); }
         
+        /* HEADER */
         header { 
             display: flex; justify-content: space-between; align-items: center; 
             margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--border-white);
+            flex-shrink: 0;
         }
         .title-gradient {
-            font-size: 20px; font-weight: bold;
+            font-size: 20px; font-weight: bold; margin: 0;
             background: linear-gradient(to right, #38bdf8, #818cf8);
             -webkit-background-clip: text; -webkit-text-fill-color: transparent;
         }
-
         .status-badge {
             display: flex; align-items: center; gap: 8px; padding: 4px 12px;
             background: #0f172a; border-radius: 99px; border: 1px solid var(--border-white);
@@ -108,7 +116,21 @@
         .led { width: 8px; height: 8px; border-radius: 50%; background: #475569; }
         .led-active { background: #10b981; box-shadow: 0 0 8px rgba(16,185,129,0.6); }
 
-        .mapping-card { background: var(--slate-950); padding: 12px; border-radius: 12px; border: 1px solid var(--border-white); margin-bottom: 12px; }
+        /* CARDS */
+        .mapping-card { 
+            background: var(--slate-950); padding: 12px; border-radius: 12px; 
+            border: 1px solid var(--border-white); margin-bottom: 12px; position: relative; 
+        }
+        .section-header {
+            padding: 12px; cursor: pointer; display: flex; justify-content: space-between; align-items: center;
+        }
+        .section-header:hover { background: rgba(255,255,255,0.03); }
+        
+        .panel-header {
+            padding: 16px; background: rgba(255,255,255,0.05); border-bottom: 1px solid var(--border-white);
+            font-size: 10px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px;
+            display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;
+        }
     </style>
 </head>
 <body>
@@ -121,17 +143,17 @@
     </header>
 
     <main class="grid-container">
-        <div class="col-3" style="display: flex; flex-direction: column; gap: 16px;">
-            <section class="glass" style="padding: 20px;">
-                <h2 style="font-size: 10px; color: var(--sky-400); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 16px;">Connection</h2>
+        <div class="col-3">
+            <section class="glass" style="padding: 20px; margin-bottom: 16px;">
+                <h2 style="font-size: 10px; color: var(--sky-400); text-transform: uppercase; margin-bottom: 16px; margin-top: 0;">Connection</h2>
                 <input id="host" type="text" placeholder="Host IP">
                 <input id="progId" type="text" placeholder="OPC ProgID">
                 <button onclick="browse()" class="btn btn-sky">Discover Tags</button>
             </section>
             
             <section class="glass" style="padding: 20px; flex-grow: 1;">
-                <h2 style="font-size: 10px; color: #34d399; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 16px;">Database</h2>
-                <div class="window-scroll" style="flex-grow: 1;">
+                <h2 style="font-size: 10px; color: #34d399; text-transform: uppercase; margin-bottom: 16px; margin-top: 0;">Database</h2>
+                <div class="window-scroll">
                     <input id="token" type="password" placeholder="Token">
                     <input id="org" type="text" placeholder="Org">
                     <input id="bucket" type="text" placeholder="Bucket">
@@ -142,43 +164,51 @@
         </div>
 
         <div class="col-3 glass">
-            <div style="padding: 16px; background: rgba(255,255,255,0.05); font-size: 10px; font-weight: bold; color: #f59e0b; text-transform: uppercase;">Address Space</div>
+            <div class="panel-header" style="color: #f59e0b;">Address Space</div>
             <div id="tree" class="window-scroll" style="padding: 16px; font-size: 11px; font-family: monospace;">
-                <p style="color: #64748b; font-style: italic;">Click discover to load tags...</p>
+                <p style="color: #64748b; font-style: italic; text-align: center;">Click discover to load tags...</p>
             </div>
         </div>
 
         <div class="col-3 glass">
-            <div style="padding: 16px; background: rgba(255,255,255,0.05); display: flex; justify-content: space-between; align-items: center;">
-                <h2 style="font-size: 10px; font-weight: bold; color: var(--fuchsia-400); text-transform: uppercase;">Mappings</h2>
-                <div style="display: flex; gap: 8px;">
-                    <button onclick="exportCombinedCSV()" style="background: none; border: none; color: #64748b; font-size: 9px; cursor: pointer; font-weight: bold;">EXPORT</button>
-                    <button onclick="document.getElementById('csvIn').click()" style="background: none; border: none; color: #64748b; font-size: 9px; cursor: pointer; font-weight: bold;">IMPORT</button>
+            <div class="panel-header" style="color: var(--fuchsia-400);">
+                <span>Mapping Center</span>
+                <div style="display: flex; gap: 10px;">
+                    <button onclick="exportCombinedCSV()" style="background: none; border: none; color: #64748b; font-size: 9px; cursor: pointer; font-weight: bold; text-transform: uppercase;">Export</button>
+                    <button onclick="document.getElementById('csvIn').click()" style="background: none; border: none; color: #64748b; font-size: 9px; cursor: pointer; font-weight: bold; text-transform: uppercase;">Import</button>
                     <input type="file" id="csvIn" style="display: none;" accept=".csv" onchange="importCombinedCSV(this)">
                 </div>
             </div>
+            
             <div class="window-scroll" style="padding: 16px;">
-                <div id="teleSection" class="mapping-card">
-                    <div onclick="toggle('teleSection')" style="cursor: pointer; display: flex; justify-content: space-between; font-size: 9px; color: #818cf8; font-weight: bold;">
-                        <span>TELEMETRY</span>
-                        <span class="rotate-icon">▼</span>
+                <div id="teleSection" style="background: rgba(15,23,42,0.5); border: 1px solid var(--border-white); border-radius: 12px; overflow: hidden; margin-bottom: 12px;">
+                    <div class="section-header" onclick="toggle('teleSection')">
+                        <span style="font-size: 9px; color: var(--indigo-400); font-weight: bold; text-transform: uppercase;">Telemetry (kiln1)</span>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <button onclick="event.stopPropagation(); clearMappings('telemetry')" class="btn-clear">Clear All</button>
+                            <span class="rotate-icon">▼</span>
+                        </div>
                     </div>
-                    <div id="readMappingList" class="collapsible-content" style="margin-top: 10px;"></div>
+                    <div id="readMappingList" class="collapsible-content" style="padding: 12px; border-top: 1px solid var(--border-white);"></div>
                 </div>
-                <div id="actSection" class="mapping-card">
-                    <div onclick="toggle('actSection')" style="cursor: pointer; display: flex; justify-content: space-between; font-size: 9px; color: var(--fuchsia-400); font-weight: bold;">
-                        <span>ACTUATION</span>
-                        <span class="rotate-icon">▼</span>
+
+                <div id="actSection" style="background: rgba(15,23,42,0.5); border: 1px solid var(--border-white); border-radius: 12px; overflow: hidden;">
+                    <div class="section-header" onclick="toggle('actSection')">
+                        <span style="font-size: 9px; color: var(--fuchsia-400); font-weight: bold; text-transform: uppercase;">Actuation (kiln2)</span>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <button onclick="event.stopPropagation(); clearMappings('actuation')" class="btn-clear">Clear All</button>
+                            <span class="rotate-icon">▼</span>
+                        </div>
                     </div>
-                    <div id="writeMappingList" class="collapsible-content" style="margin-top: 10px;"></div>
+                    <div id="writeMappingList" class="collapsible-content" style="padding: 12px; border-top: 1px solid var(--border-white);"></div>
                 </div>
             </div>
         </div>
 
         <div class="col-3 glass">
-            <div style="padding: 16px; background: rgba(255,255,255,0.05); font-size: 10px; font-weight: bold; color: #818cf8; text-transform: uppercase;">Live Monitor</div>
+            <div class="panel-header" style="color: var(--indigo-400);">Live Monitor</div>
             <div id="monitor" class="window-scroll" style="padding: 16px;">
-                <p style="color: #64748b; font-size: 10px; font-style: italic;">Live values appear here...</p>
+                <p style="color: #64748b; font-size: 10px; font-style: italic; text-align: center;">Live values appear here...</p>
             </div>
         </div>
     </main>
@@ -190,6 +220,11 @@
         let isBridgeRunning = false;
 
         window.onload = loadConfig;
+
+        // HELPER: Makes ID safe for HTML attributes (Fixes Folder Bug)
+        function sanitizeId(id) {
+            return 'node-' + btoa(id).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_'); 
+        }
 
         function toggle(id) { document.getElementById(id).classList.toggle('is-closed'); }
 
@@ -205,31 +240,94 @@
                     document.getElementById('bucket').value = cfg.influxBucket || '';
                     readMapping = cfg.readMapping || {};
                     writeMapping = cfg.writeMapping || {};
+                    if (cfg.readTags) cfg.readTags.forEach(id => { if (!readMapping[id]) readMapping[id] = id; });
                     renderMappingUI();
                 }
             } catch (e) {}
             setInterval(checkLive, 1000);
         }
 
+        async function removeTag(tagId) {
+            if (!confirm(`Delete ${tagId}?`)) return;
+            try {
+                const res = await fetch(`${BASE_URL}/api/config/tag?tagId=${encodeURIComponent(tagId)}`, { method: 'DELETE' });
+                if (res.ok) {
+                    delete readMapping[tagId];
+                    for(let k in writeMapping) if(writeMapping[k] === tagId) delete writeMapping[k];
+                    renderMappingUI();
+                }
+            } catch (e) { alert("Server error"); }
+        }
+
+        async function clearMappings(type) {
+            if (!confirm(`Clear all ${type}?`)) return;
+            if (type === 'telemetry') {
+                readMapping = {};
+                writeMapping = {}; 
+                // Uncheck visible boxes
+                document.querySelectorAll('#tree input[type="checkbox"]').forEach(cb => cb.checked = false);
+            } else if (type === 'actuation') {
+                writeMapping = {};
+            }
+            renderMappingUI();
+            await saveCurrentState();
+        }
+
+        async function saveCurrentState() {
+            const config = {
+                opcHost: document.getElementById('host').value,
+                opcProgId: document.getElementById('progId').value,
+                influxUrl: "http://localhost:8086",
+                influxToken: document.getElementById('token').value,
+                influxOrg: document.getElementById('org').value,
+                influxBucket: document.getElementById('bucket').value,
+                readTags: Object.keys(readMapping),
+                readMapping: readMapping,
+                writeMapping: writeMapping
+            };
+            try { await fetch(`${BASE_URL}/api/config/save`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(config) }); } catch(e) {}
+        }
+
         async function browse(nodeId = null) {
+            const safeId = nodeId ? sanitizeId(nodeId) : 'tree';
+            const container = document.getElementById(safeId);
+            
+            // Toggle Logic
+            if (nodeId && container && container.innerHTML.trim() !== "") {
+                container.innerHTML = "";
+                const icon = document.getElementById(`icon-${safeId}`);
+                if (icon) icon.innerText = "📁";
+                return;
+            }
+
             const host = document.getElementById('host').value, progId = document.getElementById('progId').value;
             try {
                 const res = await fetch(`${BASE_URL}/api/browse?host=${host}&progId=${progId}${nodeId ? '&nodeId='+encodeURIComponent(nodeId) : ''}`);
                 const data = await res.json();
-                const container = nodeId ? document.getElementById(`child-${nodeId}`) : document.getElementById('tree');
-                container.innerHTML = '';
+                
+                if(!nodeId) document.getElementById('tree').innerHTML = ''; // Clear root
+                
                 data.forEach(item => {
+                    const itemSafeId = sanitizeId(item.id);
                     const div = document.createElement('div');
                     div.style.paddingLeft = "12px";
                     div.style.borderLeft = "1px solid rgba(255,255,255,0.05)";
                     div.style.margin = "4px 0";
+                    
                     div.innerHTML = `<div style="display: flex; align-items: center; gap: 8px;">
-                        ${item.type === 'folder' ? `<button style="background:none; border:none; color:#38bdf8; cursor:pointer;" onclick="browse('${item.id}')">📁</button>` : `<input type="checkbox" onchange="toggleTag('${item.id}', this.checked)" ${readMapping[item.id] ? 'checked' : ''} style="width:12px; height:12px;">`}
-                        <span style="color:#94a3b8; font-size:10px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${item.name}</span>
-                    </div><div id="child-${item.id}"></div>`;
+                        ${item.type === 'folder' ? 
+                            `<button id="icon-${itemSafeId}" style="background:none; border:none; color:#38bdf8; cursor:pointer; font-weight:bold;" onclick="browse('${item.id}')">📁</button>` : 
+                            `<input type="checkbox" onchange="toggleTag('${item.id}', this.checked)" ${readMapping[item.id] ? 'checked' : ''} style="width:12px; height:12px; margin:0;">`}
+                        <span style="color:#94a3b8; font-size:10px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; cursor:default;" title="${item.id}" onclick="${item.type === 'folder' ? `browse('${item.id}')` : ''}">${item.name}</span>
+                    </div><div id="${itemSafeId}"></div>`;
                     container.appendChild(div);
                 });
-            } catch(e) { console.error("Browse failed", e); }
+                
+                if (nodeId) {
+                    const icon = document.getElementById(`icon-${safeId}`);
+                    if (icon) icon.innerText = "📂";
+                }
+            } catch (err) {}
         }
 
         function toggleTag(id, checked) {
@@ -239,6 +337,7 @@
                 for(let k in writeMapping) if(writeMapping[k] === id) delete writeMapping[k];
             }
             renderMappingUI();
+            saveCurrentState();
         }
 
         function renderMappingUI() {
@@ -247,20 +346,26 @@
             
             const rEntries = Object.entries(readMapping);
             readList.innerHTML = rEntries.length ? rEntries.map(([id, alias]) => `
-                <div style="background:#020617; padding:10px; border-radius:8px; margin-bottom:8px; border:1px solid rgba(255,255,255,0.05);">
-                    <div style="font-size:7px; color:#475569; text-transform:uppercase; margin-bottom:4px; overflow:hidden; text-overflow:ellipsis;">${id}</div>
-                    <input type="text" value="${alias}" oninput="readMapping['${id}']=this.value" style="margin-bottom:4px; padding:4px;">
-                    <div style="display:flex; align-items:center; gap:6px;">
-                        <input type="checkbox" onchange="toggleWrite('${id}', this.checked)" ${Object.values(writeMapping).includes(id) ? 'checked' : ''} style="width:10px; height:10px;">
-                        <span style="font-size:8px; color:#64748b;">Enable Actuation</span>
+                <div class="mapping-card">
+                    <button onclick="removeTag('${id}')" class="btn-delete">✕</button>
+                    <div style="font-size:7px; color:#475569; text-transform:uppercase; margin-bottom:4px; font-weight:bold; overflow:hidden; text-overflow:ellipsis; padding-right:20px;">${id}</div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <span style="font-size:8px; color:var(--indigo-400); font-weight:bold;">AS</span>
+                        <input type="text" value="${alias}" onchange="readMapping['${id}']=this.value; saveCurrentState()" style="margin:0; padding:4px;">
+                    </div>
+                    <div style="display:flex; align-items:center; gap:6px; margin-top:6px;">
+                        <input type="checkbox" onchange="toggleWrite('${id}', this.checked)" ${Object.values(writeMapping).includes(id) ? 'checked' : ''} style="width:10px; height:10px; margin:0;">
+                        <span style="font-size:8px; color:#64748b; text-transform:uppercase;">Enable Write Back</span>
                     </div>
                 </div>`).join('') : '<p style="font-size:9px; color:#334155; text-align:center;">No tags mapped</p>';
 
             const wEntries = Object.entries(writeMapping);
             writeList.innerHTML = wEntries.length ? wEntries.map(([alias, id]) => `
-                <div style="background:#020617; padding:10px; border-radius:8px; border:1px solid rgba(232, 121, 249, 0.2);">
-                    <div style="font-size:7px; color:#e879f9; text-transform:uppercase; font-weight:bold;">Alias</div>
-                    <input type="text" value="${alias}" oninput="updateWriteAlias('${alias}', this.value)" style="margin-top:4px; padding:4px;">
+                <div class="mapping-card" style="border-color: rgba(232, 121, 249, 0.2);">
+                    <button onclick="removeWriteMapping('${alias}')" class="btn-delete">✕</button>
+                    <div style="font-size:7px; color:var(--fuchsia-400); text-transform:uppercase; font-weight:bold;">Incoming Alias (kiln2)</div>
+                    <input type="text" value="${alias}" onchange="updateWriteAlias('${alias}', this.value)" style="margin:4px 0; padding:4px;">
+                    <div style="font-size:7px; color:#334155; overflow:hidden; text-overflow:ellipsis; font-family:monospace;">TARGET: ${id}</div>
                 </div>`).join('') : '<p style="font-size:9px; color:#334155; text-align:center; font-style:italic;">Enable in telemetry</p>';
         }
 
@@ -268,11 +373,24 @@
             if (checked) writeMapping[id + "_SP"] = id;
             else for(let k in writeMapping) if(writeMapping[k] === id) delete writeMapping[k];
             renderMappingUI();
+            saveCurrentState();
         }
 
-        function updateWriteAlias(old, newVal) { const id = writeMapping[old]; delete writeMapping[old]; writeMapping[newVal] = id; }
+        function updateWriteAlias(old, newVal) { 
+            const id = writeMapping[old]; 
+            delete writeMapping[old]; 
+            writeMapping[newVal] = id; 
+            saveCurrentState(); 
+        }
+        
+        function removeWriteMapping(alias) {
+            delete writeMapping[alias];
+            renderMappingUI();
+            saveCurrentState();
+        }
 
         async function startBridge() {
+            await saveCurrentState();
             const config = {
                 opcHost: document.getElementById('host').value,
                 opcProgId: document.getElementById('progId').value,
@@ -303,12 +421,15 @@
                 const data = await res.json();
                 const container = document.getElementById('monitor');
                 const ids = Object.keys(readMapping);
-                if (!ids.length) return;
+                if (!ids.length) { container.innerHTML = '<p style="color: #64748b; font-size: 10px; font-style: italic; text-align: center;">No live tags</p>'; return; }
                 container.innerHTML = ids.map(id => {
                     const val = data[id];
-                    return `<div style="display:flex; justify-content:space-between; align-items:center; padding:8px; background:rgba(2,6,23,0.5); border-radius:8px; border:1px solid rgba(255,255,255,0.05); margin-bottom:8px;">
-                        <span style="font-size:9px; color:#94a3b8; overflow:hidden; text-overflow:ellipsis; width:60%;">${readMapping[id] || id}</span>
-                        <span style="font-family:monospace; font-size:10px; font-weight:bold; color:#38bdf8; background:rgba(56,189,248,0.05); padding:2px 6px; border-radius:4px;">${val !== undefined ? (typeof val === 'number' ? val.toFixed(3) : val) : '...'}</span>
+                    return `<div style="display:flex; justify-content:space-between; align-items:center; padding:8px; background:rgba(2,6,23,0.5); border-radius:8px; border:1px solid rgba(255,255,255,0.05); margin-bottom:8px; position:relative;">
+                        <span style="font-size:9px; color:#94a3b8; overflow:hidden; text-overflow:ellipsis; width:60%;" title="${id}">${readMapping[id] || id}</span>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <span style="font-family:monospace; font-size:10px; font-weight:bold; color:#38bdf8; background:rgba(56,189,248,0.05); padding:2px 6px; border-radius:4px;">${val !== undefined ? (typeof val === 'number' ? val.toFixed(3) : val) : '...'}</span>
+                            <button onclick="removeTag('${id}')" style="background:none; border:none; color:#475569; font-weight:bold; cursor:pointer; font-size:10px;">✕</button>
+                        </div>
                     </div>`;
                 }).join('');
             } catch(e) {}
@@ -336,6 +457,7 @@
                     }
                 });
                 renderMappingUI();
+                saveCurrentState();
             };
             reader.readAsText(input.files[0]);
         }
