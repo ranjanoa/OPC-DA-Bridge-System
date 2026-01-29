@@ -44,7 +44,7 @@ object _lock = new object();
 
 Bootstrap.Initialize();
 
-#region Persistence
+#region Persistent Storage
 
 string GetSettingsPath() {
     string folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "IndustrialOpcBridge");
@@ -59,7 +59,7 @@ BridgeConfig? LoadConfigFromFile() {
             string json = System.IO.File.ReadAllText(path);
             return JsonSerializer.Deserialize<BridgeConfig>(json, jsonOptions);
         }
-    } catch { }
+    } catch (Exception ex) { Console.WriteLine($"[CONFIG] Load Error: {ex.Message}"); }
     return null;
 }
 
@@ -68,6 +68,7 @@ void SaveConfigToFile(BridgeConfig config) {
         string path = GetSettingsPath();
         string json = JsonSerializer.Serialize(config, jsonOptions);
         System.IO.File.WriteAllText(path, json);
+        Console.WriteLine($"[CONFIG] Settings saved to: {path}");
     } catch (Exception ex) { Console.WriteLine($"[CONFIG] Save Error: {ex.Message}"); }
 }
 
@@ -85,7 +86,7 @@ bool EnsureConnected(string host, string progId) {
             }
             return true;
         } catch (Exception ex) {
-            Console.WriteLine($"[OPC] Connection Failed: {ex.Message}");
+            Console.WriteLine($"[OPC] Connection Error: {ex.Message}");
             return false;
         }
     }
@@ -102,8 +103,15 @@ void SafeRemoveGroup(OpcDaGroup? group) {
 #region API Endpoints
 
 app.MapGet("/", () => {
-    string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "index.html");
-    if (System.IO.File.Exists(path)) return Results.Content(System.IO.File.ReadAllText(path), "text/html");
+    // Robust path finding for the dashboard
+    string[] paths = {
+        Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "index.html"),
+        Path.Combine(Directory.GetCurrentDirectory(), "index.html")
+    };
+    
+    foreach(var p in paths) {
+        if (System.IO.File.Exists(p)) return Results.Content(System.IO.File.ReadAllText(p), "text/html");
+    }
     return Results.Text("index.html not found.");
 });
 
@@ -122,45 +130,34 @@ app.MapGet("/api/browse", (string host, string progId, string? nodeId) => {
     if (!EnsureConnected(host, progId)) return Results.Problem("OPC Connection Failed.");
     try {
         var browser = new OpcDaBrowserAuto(_server!);
-        string target = nodeId ?? "";
+        // FIXED: Reverted to GetElements because Auto browser doesn't support GetBranches/Leaves
+        var elements = browser.GetElements(nodeId ?? "");
+        
+        var result = elements.Select(e => new { 
+            id = e.ItemId, 
+            name = e.Name, 
+            type = e.HasChildren ? "folder" : "tag" 
+        });
 
-        // 1. Get Folders (Sorted)
-        var branches = browser.GetBranches(target)
-            .Select(b => new { id = b.ItemId, name = b.Name, type = "folder" })
-            .OrderBy(x => x.name);
-
-        // 2. Get Tags (Sorted)
-        var leaves = browser.GetLeaves(target)
-            .Select(l => new { id = l.ItemId, name = l.Name, type = "tag" })
-            .OrderBy(x => x.name);
-
-        // 3. Combine: Folders first, then Tags
-        var combined = branches.Concat(leaves).ToList();
-
-        return Results.Ok(combined);
+        return Results.Ok(result);
     } catch (Exception ex) { 
-        // Fallback for servers that don't support branch/leaf separation
-        try {
-             var elements = new OpcDaBrowserAuto(_server!).GetElements(nodeId ?? "")
-                .Select(e => new { id = e.ItemId, name = e.Name, type = e.HasChildren ? "folder" : "tag" })
-                .OrderByDescending(x => x.type) // Folders first
-                .ThenBy(x => x.name);
-            return Results.Ok(elements);
-        } catch {
-             return Results.Json(new { error = ex.Message }); 
-        }
+        return Results.Json(new { error = ex.Message }); 
     }
 });
 
 app.MapPost("/api/bridge/start", (BridgeConfig config) => {
     if (_bridgeActive) { _cts?.Cancel(); _bridgeActive = false; Thread.Sleep(500); }
+    
     SaveConfigToFile(config); 
     if (!EnsureConnected(config.OpcHost, config.OpcProgId)) return Results.Problem("Check OPC Settings.");
+
     _bridgeActive = true;
     _cts = new CancellationTokenSource();
     _lastCommandProcessed = DateTime.UtcNow.AddSeconds(-10); 
+    
     _ = Task.Run(() => RunIngestionLoop(config, _cts.Token));
     _ = Task.Run(() => RunActuationLoop(config, _cts.Token));
+    
     return Results.Ok(new { status = "Active" });
 });
 
@@ -181,10 +178,10 @@ app.MapDelete("/api/config/tag", (string tagId) => {
     var wMap = config.WriteMapping ?? new Dictionary<string, string>();
     
     if (rMap.ContainsKey(tagId)) rMap.Remove(tagId);
-    if (wMap.ContainsValue(tagId)) {
-        var key = wMap.FirstOrDefault(x => x.Value == tagId).Key;
-        if (key != null) wMap.Remove(key);
-    }
+    
+    // Clean up reverse mapping
+    var keyToRemove = wMap.FirstOrDefault(x => x.Value == tagId).Key;
+    if (keyToRemove != null) wMap.Remove(keyToRemove);
 
     var updated = config with { 
         ReadTags = config.ReadTags.Where(t => t != tagId).ToArray(),
@@ -193,45 +190,50 @@ app.MapDelete("/api/config/tag", (string tagId) => {
     };
     
     SaveConfigToFile(updated);
-    _liveMonitor.TryRemove(tagId, out object? _);
+    
+    object? _;
+    _liveMonitor.TryRemove(tagId, out _);
+    
     return Results.Ok(updated);
 });
 
 #endregion
 
-#region Workers
+#region Background Workers
 
 async Task RunIngestionLoop(BridgeConfig config, CancellationToken ct) {
-    if (config.ReadTags == null || config.ReadTags.Length == 0) return;
-    
-    using var influx = new InfluxDBClient(config.InfluxUrl, config.InfluxToken);
-    var writeApi = influx.GetWriteApi();
-    
     while (!ct.IsCancellationRequested && _bridgeActive) {
         OpcDaGroup? group = null;
         try {
             if (!EnsureConnected(config.OpcHost, config.OpcProgId)) { await Task.Delay(5000, ct); continue; }
 
+            using var influx = new InfluxDBClient(config.InfluxUrl, config.InfluxToken);
+            var writeApi = influx.GetWriteApi();
+            
             group = _server!.AddGroup("Ingest_" + Guid.NewGuid().ToString().Substring(0,8));
             group.UpdateRate = TimeSpan.FromMilliseconds(1000);
             
-            var tags = config.ReadTags.Select(t => new OpcDaItemDefinition { ItemId = t, IsActive = true }).ToArray();
-            if (tags.Length > 0) group.AddItems(tags);
+            var tags = config.ReadTags.Where(t => !string.IsNullOrWhiteSpace(t)).Select(t => new OpcDaItemDefinition { ItemId = t, IsActive = true }).ToArray();
             
-            while (!ct.IsCancellationRequested && _bridgeActive && _server.IsConnected) {
-                var results = group.Read(group.Items, OpcDaDataSource.Device);
-                foreach (var res in results) {
-                    if (res?.Value != null) {
-                        _liveMonitor[res.Item.ItemId] = res.Value;
-                        string field = (config.ReadMapping != null && config.ReadMapping.TryGetValue(res.Item.ItemId, out var a)) ? a : res.Item.ItemId;
-                        
-                        if (double.TryParse(res.Value.ToString(), out double val)) {
-                            var point = PointData.Measurement("kiln1").Field(field, val).Timestamp(DateTime.UtcNow, InfluxDB.Client.Api.Domain.WritePrecision.Ns);
-                            writeApi.WritePoint(point, config.InfluxBucket, config.InfluxOrg);
+            if (tags.Length > 0) {
+                group.AddItems(tags);
+                while (!ct.IsCancellationRequested && _bridgeActive && _server.IsConnected) {
+                    var results = group.Read(group.Items, OpcDaDataSource.Device);
+                    foreach (var res in results) {
+                        if (res?.Value != null) {
+                            _liveMonitor[res.Item.ItemId] = res.Value;
+                            string field = (config.ReadMapping != null && config.ReadMapping.TryGetValue(res.Item.ItemId, out var a)) ? a : res.Item.ItemId;
+                            
+                            if (double.TryParse(res.Value.ToString(), out double val)) {
+                                var point = PointData.Measurement("kiln1").Field(field, val).Timestamp(DateTime.UtcNow, InfluxDB.Client.Api.Domain.WritePrecision.Ns);
+                                writeApi.WritePoint(point, config.InfluxBucket, config.InfluxOrg);
+                            }
                         }
                     }
+                    await Task.Delay(1000, ct);
                 }
-                await Task.Delay(1000, ct);
+            } else {
+                await Task.Delay(2000, ct);
             }
         } catch { await Task.Delay(5000, ct); } finally { SafeRemoveGroup(group); }
     }
@@ -245,11 +247,15 @@ async Task RunActuationLoop(BridgeConfig config, CancellationToken ct) {
 
             using var influx = new InfluxDBClient(config.InfluxUrl, config.InfluxToken);
             var queryApi = influx.GetQueryApi();
+            // FIXED: Added missing writeApi for the Actuation Loop
+            var writeApi = influx.GetWriteApi(); 
+            
             writeGroup = _server!.AddGroup("Act_" + Guid.NewGuid().ToString().Substring(0,8));
             
             while (!ct.IsCancellationRequested && _bridgeActive && _server.IsConnected) {
-                string flux = $@"from(bucket: ""{config.InfluxBucket}"") |> range(start: -15m) |> filter(fn: (r) => r[""_measurement""] == ""kiln2"") |> last()";
+                string flux = $@"from(bucket: ""{config.InfluxBucket}"") |> range(start: -30m) |> filter(fn: (r) => r[""_measurement""] == ""kiln2"") |> last()";
                 var tables = await queryApi.QueryAsync(flux, config.InfluxOrg);
+                
                 if (tables != null) {
                     foreach (var record in tables.SelectMany(t => t.Records)) {
                         var ts = record.GetTime()?.ToDateTimeUtc() ?? DateTime.MinValue;
@@ -258,6 +264,7 @@ async Task RunActuationLoop(BridgeConfig config, CancellationToken ct) {
                             object val = record.GetValue();
                             string tag = (config.WriteMapping != null && config.WriteMapping.TryGetValue(field, out var t)) ? t : field;
                             
+                            // Dynamic Item Addition
                             var item = writeGroup.Items.FirstOrDefault(i => i.ItemId == tag);
                             if (item == null) {
                                 var added = writeGroup.AddItems(new[] { new OpcDaItemDefinition { ItemId = tag, IsActive = true } });
@@ -268,8 +275,11 @@ async Task RunActuationLoop(BridgeConfig config, CancellationToken ct) {
                                 writeGroup.Write(new[] { item }, new[] { val });
                                 _lastCommandProcessed = ts;
                                 Console.WriteLine($"[ACTUATION] Executed: {tag} = {val}");
+                                
                                 if (double.TryParse(val.ToString(), out double numericVal)) {
                                     var feedback = PointData.Measurement("kiln2_feedback").Tag("status", "success").Tag("alias", field).Field("value", numericVal).Timestamp(DateTime.UtcNow, InfluxDB.Client.Api.Domain.WritePrecision.Ns);
+                                    
+                                    // Uses the new writeApi instance
                                     writeApi.WritePoint(feedback, config.InfluxBucket, config.InfluxOrg);
                                 }
                             }
